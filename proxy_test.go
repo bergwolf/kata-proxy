@@ -196,10 +196,12 @@ func TestProxy(t *testing.T) {
 	defer servConn.Close()
 
 	results := make(chan error)
-	_, err = serve(servConn, "unix", listenSock, results)
+	l2, err := serve(servConn, "unix", listenSock, results)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	defer l2.Close()
 
 	// run client tests
 	files, err := ioutil.ReadDir(testDir)
@@ -207,28 +209,38 @@ func TestProxy(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	fileCount := 0
+
 	wg := &sync.WaitGroup{}
 	for _, file := range files {
 		if file.IsDir() {
 			continue
 		}
+
+		fileCount++
+
 		wg.Add(1)
 		go func(filename string) {
 			results <- client(listenSock, filename)
 			wg.Done()
 		}(file.Name())
+
 	}
 
-	go func() {
-		wg.Wait()
-		close(results)
-	}()
+	resultsRead := 0
 
 	for err = range results {
 		if err != nil {
 			t.Fatal(err)
 		}
+
+		resultsRead++
+		if resultsRead == fileCount {
+			break
+		}
 	}
+
+	wg.Wait()
 }
 
 func TestSetupSigtermNotifier(t *testing.T) {
