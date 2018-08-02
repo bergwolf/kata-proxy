@@ -109,7 +109,12 @@ func serve(servConn io.ReadWriteCloser, proto, addr string, results chan error) 
 
 	go func() {
 		var err error
+
+		wg := &sync.WaitGroup{}
+		// Add 1 to track the for loop
+		wg.Add(1)
 		defer func() {
+			wg.Wait()
 			l.Close()
 			session.Close()
 			results <- err
@@ -119,34 +124,37 @@ func serve(servConn io.ReadWriteCloser, proto, addr string, results chan error) 
 			var conn, stream net.Conn
 			conn, err = l.Accept()
 			if err != nil {
-				return
+				break
 			}
 
 			stream, err = session.Open()
 			if err != nil {
-				return
+				break
 			}
 
-			go proxyConn(conn, stream)
+			go proxyConn(conn, stream, wg)
 		}
+		wg.Done()
 	}()
 
 	return l, session, nil
 }
 
-func proxyConn(conn1 net.Conn, conn2 net.Conn) {
+func proxyConn(conn1 net.Conn, conn2 net.Conn, wg *sync.WaitGroup) {
 	once := &sync.Once{}
 	cleanup := func() {
 		conn1.Close()
 		conn2.Close()
 	}
 	copyStream := func(dst io.Writer, src io.Reader) {
+		wg.Add(1)
 		_, err := io.Copy(dst, src)
 		if err != nil {
 			logger().Debug("Copy stream error: %v", err)
 		}
 
 		once.Do(cleanup)
+		wg.Done()
 	}
 
 	go copyStream(conn1, conn2)
