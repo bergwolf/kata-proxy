@@ -222,6 +222,7 @@ func TestProxy(t *testing.T) {
 		if file.IsDir() {
 			continue
 		}
+
 		wg.Add(1)
 		go func(filename string) {
 			err := client(listenSock, filename)
@@ -230,8 +231,8 @@ func TestProxy(t *testing.T) {
 			}
 			wg.Done()
 		}(file.Name())
-	}
 
+	}
 	wg.Wait()
 }
 
