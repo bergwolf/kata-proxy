@@ -218,6 +218,7 @@ func TestProxy(t *testing.T) {
 	}
 
 	wg := &sync.WaitGroup{}
+	cliRes := make(chan error)
 	for _, file := range files {
 		if file.IsDir() {
 			continue
@@ -225,13 +226,20 @@ func TestProxy(t *testing.T) {
 
 		wg.Add(1)
 		go func(filename string) {
-			err := client(listenSock, filename)
-			if err != nil {
-				t.Fatal(err)
-			}
+			cliRes <- client(listenSock, filename)
 			wg.Done()
 		}(file.Name())
+	}
 
+	go func() {
+		wg.Wait()
+		close(cliRes)
+	}()
+
+	for err := range cliRes {
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	wg.Wait()
 }
